@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Register - ReliefAI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .register-container {
+            width: 100%;
+            max-width: 450px;
+            margin: 80px auto;
+            background: #1e293b;
+            padding: 40px 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/" class="logo"><i class="fa-solid fa-bolt" style="color:#38bdf8; margin-right:5px;"></i> ReliefAI</a>
+    <div class="nav-links">
+        <a href="/"><i class="fa-solid fa-house"></i> Home</a>
+        {% if session.get('user_id') %}
+            <a href="/report"><i class="fa-solid fa-file-shield"></i> Report Emergency</a>
+            {% if session.get('role') == 'admin' %}
+                <a href="/dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                <a href="/admin"><i class="fa-solid fa-shield-halved"></i> Admin</a>
+            {% endif %}
+            <span style="color: #10b981; font-size: 13px; margin: 0 10px; border-left: 1px solid #334155; padding-left: 10px;">Hello, <b>{{ (session.get('user') or 'User').title() }}</b> <span style="color:#94a3b8; font-size:11px;">({{ session.get('role', 'user') }})</span></span>
+            <a href="/logout" style="color: #ef4444;"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        {% else %}
+            <a href="/login"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+            <a href="/register"><i class="fa-solid fa-user-plus"></i> Register</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">
+              <i class="fa-solid fa-circle-{% if category == 'success' %}check{% else %}exclamation{% endif %}"></i> 
+              {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="register-container">
+        <h2><i class="fa-solid fa-user-plus" style="color: #38bdf8; font-size:35px; margin-bottom:15px; display:block;"></i> Create Node Identity</h2>
+        <p style="color: #94a3b8; font-size: 14px; margin-bottom:25px;">Register access strictly for simulation purposes.</p>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label><i class="fa-solid fa-address-card"></i> Username Identifier</label>
+                <input type="text" name="username" placeholder="Enter assigned username" required>
+            </div>
+            <div class="form-group">
+                <label><i class="fa-solid fa-key"></i> Passkey</label>
+                <input type="password" name="password" placeholder="Enter secure key" required>
+            </div>
+            <div class="form-group">
+                <label><i class="fa-solid fa-id-badge"></i> Request Security Role</label>
+                <select name="role">
+                    <option value="user">Standard Agent (User)</option>
+                    <option value="admin">Overwatch Command (Admin)</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-success" style="width:100%; margin-top:20px; font-size:16px;">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Register Signature
+            </button>
+        </form>
+        <p style="margin-top: 20px; font-size: 14px; color:#cbd5f5;">Already established? <a href="/login" style="color:#38bdf8;">Authenticate here.</a></p>
+    </div>
+</div>
+
+</body>
+</html>

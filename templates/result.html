@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Report Submitted - ReliefAI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .result-container {
+            display: flex;
+            height: calc(100vh - 70px);
+            width: 100%;
+        }
+        
+        .left {
+            width: 40%;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .right {
+            width: 60%;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+        }
+
+        @media (max-width: 900px) {
+            .result-container { flex-direction: column; height: auto; }
+            .left, .right { width: 100%; }
+            #map { height: 400px; }
+        }
+    </style>
+</head>
+<body style="overflow: hidden;">
+
+<nav class="navbar">
+    <a href="/" class="logo"><i class="fa-solid fa-bolt" style="color:#38bdf8; margin-right:5px;"></i> ReliefAI</a>
+    <div class="nav-links">
+        <a href="/"><i class="fa-solid fa-house"></i> Home</a>
+        {% if session.get('user_id') %}
+            <a href="/report"><i class="fa-solid fa-file-shield"></i> Report Emergency</a>
+            {% if session.get('role') == 'admin' %}
+                <a href="/dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                <a href="/admin"><i class="fa-solid fa-shield-halved"></i> Admin</a>
+            {% endif %}
+            <span style="color: #10b981; font-size: 13px; margin: 0 10px; border-left: 1px solid #334155; padding-left: 10px;">Hello, <b>{{ (session.get('user') or 'User').title() }}</b> <span style="color:#94a3b8; font-size:11px;">({{ session.get('role', 'user') }})</span></span>
+            <a href="/logout" style="color: #ef4444;"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        {% else %}
+            <a href="/login"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+            <a href="/register"><i class="fa-solid fa-user-plus"></i> Register</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="result-container">
+    <div class="left">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">
+                  <i class="fa-solid fa-circle-{% if category == 'success' %}check{% else %}exclamation{% endif %}"></i> 
+                  {{ message }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="card-container">
+            <h2 style="color: #10b981; margin-bottom: 20px;"><i class="fa-solid fa-circle-check"></i> Status Logged Successfully</h2>
+
+            <div style="margin-bottom: 25px; line-height: 1.8;">
+                <p><i class="fa-solid fa-location-dot" style="width: 20px;"></i> <strong>Target Zone:</strong> <span style="color: #cbd5f5;">{{ location }}</span></p>
+                <p><i class="fa-solid fa-triangle-exclamation" style="width: 20px;"></i> <strong>Classification:</strong> <span style="color: #cbd5f5;">{{ problem }}</span></p>
+                <p><i class="fa-solid fa-bars-staggered" style="width: 20px;"></i> <strong>Context:</strong> <span style="color: #cbd5f5;">{{ description }}</span></p>
+            </div>
+            
+            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #38bdf8;">
+                <p style="margin-bottom: 5px; font-weight: 600;"><i class="fa-solid fa-microchip"></i> System Priority Estimation:</p>
+                <div style="margin-bottom: 15px;">
+                    <span class="badge priority-{{ priority }}" style="font-size: 16px; padding: 6px 15px;">{{ priority }}</span>
+                </div>
+                
+                {% if insight %}
+                <p style="color: #cbd5f5; font-size: 14px; margin: 0; line-height: 1.5; font-style: italic;">
+                    <i class="fa-solid fa-comment-dots" style="color: #38bdf8;"></i> {{ insight }}
+                </p>
+                {% endif %}
+            </div>
+
+            <div style="display: flex; flex-wrap: wrap; gap: 15px;">
+                <a href="/dashboard" class="btn btn-primary" style="flex: 1; min-width: 150px;"><i class="fa-solid fa-chart-line"></i> View Dashboard</a>
+                <a href="/report" class="btn" style="background: rgba(255,255,255,0.1); color: white; flex: 1; min-width: 150px; border: 1px solid rgba(255,255,255,0.2);"><i class="fa-solid fa-rotate-left"></i> File Another</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="right">
+        <div id="map"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    var lat = {{ lat|default(20.5937) }};
+    var lng = {{ lng|default(78.9629) }};
+
+    var map = L.map('map').setView([lat, lng], 13);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+    }).addTo(map);
+
+    var color = "#10b981"; // Default Green (Low)
+    if ("{{ priority }}" === "HIGH") color = "#ef4444";
+    if ("{{ priority }}" === "MEDIUM") color = "#f59e0b";
+
+    var marker = L.circleMarker([lat, lng], {
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.9,
+        radius: 12,
+        weight: 2
+    }).addTo(map);
+
+    marker.bindPopup("<b style='color:#0f172a; font-family: Poppins;'><i class='fa-solid fa-triangle-exclamation'></i> {{ problem }}</b><br><span style='color:#666;'>{{ location }}</span>").openPopup();
+</script>
+
+</body>
+</html>

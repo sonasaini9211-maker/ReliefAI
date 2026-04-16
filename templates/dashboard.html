@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - ReliefAI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-wrapper {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.05);
+            text-align: center;
+        }
+
+        .filter-ribbon {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(30, 41, 59, 0.5);
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .filters form {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .filters select {
+            width: auto;
+            min-width: 150px;
+            padding: 8px 12px;
+        }
+
+        .sys-badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid #10b981;
+            display: inline-block;
+        }
+
+        @media (max-width: 900px) {
+            .charts-container { grid-template-columns: 1fr; }
+            .filter-ribbon { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="global-loader">
+    <div class="global-spinner"></div>
+    <h3><i class="fa-solid fa-satellite-dish"></i> Syncing Node Data...</h3>
+</div>
+
+<nav class="navbar">
+    <a href="/" class="logo"><i class="fa-solid fa-bolt" style="color:#38bdf8; margin-right:5px;"></i> ReliefAI</a>
+    <div class="nav-links">
+        <a href="/"><i class="fa-solid fa-house"></i> Home</a>
+        {% if session.get('user_id') %}
+            <a href="/report"><i class="fa-solid fa-file-shield"></i> Report Emergency</a>
+            {% if session.get('role') == 'admin' %}
+                <a href="/dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                <a href="/admin"><i class="fa-solid fa-shield-halved"></i> Admin</a>
+            {% endif %}
+            <span style="color: #10b981; font-size: 13px; margin: 0 10px; border-left: 1px solid #334155; padding-left: 10px;">Hello, <b>{{ (session.get('user') or 'User').title() }}</b> <span style="color:#94a3b8; font-size:11px;">({{ session.get('role', 'user') }})</span></span>
+            <a href="/logout" style="color: #ef4444;"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        {% else %}
+            <a href="/login"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+            <a href="/register"><i class="fa-solid fa-user-plus"></i> Register</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+        <div>
+            <h1 style="margin: 0; display:inline-block; margin-right: 15px;"><i class="fa-solid fa-satellite-dish"></i> Dispatch Dashboard</h1>
+            <span class="sys-badge"><i class="fa-solid fa-rotate"></i> Auto Refresh: ON</span>
+        </div>
+        
+        <div style="text-align: right;">
+            <p style="font-size: 12px; color: #94a3b8; margin: 0 0 5px 0;">Last Updated: <b>{{ last_updated }}</b></p>
+            <button onclick="refreshData()" class="btn btn-primary" style="padding: 8px 15px; font-size: 14px;"><i class="fa-solid fa-arrows-rotate"></i> Sync Data</button>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card stat-total">Total Reports <span>{{ total_cases }}</span></div>
+        <div class="stat-card stat-high">High Priority <span>{{ high_priority_count }}</span></div>
+        <div class="stat-card stat-active">Active Cases <span>{{ active_cases }}</span></div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="charts-container">
+        <div class="chart-wrapper">
+            <h3><i class="fa-solid fa-chart-bar"></i> Incidents by Category</h3>
+            <div style="height: 300px; margin-top: 20px;">
+                <canvas id="categoryBarChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-wrapper">
+            <h3><i class="fa-solid fa-chart-pie"></i> Priority Distribution</h3>
+            <div style="height: 300px; margin-top: 20px;">
+                <canvas id="priorityPieChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div id="map" style="grid-column: 1 / -1; height: 500px;"></div>
+    </div>
+
+    <!-- Filtering Ribbon -->
+    <div class="filter-ribbon">
+        <h2 style="margin: 0; font-size: 22px;"><i class="fa-solid fa-tower-broadcast"></i> Live Incidents</h2>
+        <div class="filters">
+            <form method="GET" action="/dashboard" id="filterForm">
+                <select name="category" onchange="submitFilter()">
+                    <option value="All" {% if curr_category == 'All' %}selected{% endif %}>All Categories</option>
+                    <option value="Fire" {% if curr_category == 'Fire' %}selected{% endif %}>Fire</option>
+                    <option value="Medical" {% if curr_category == 'Medical' %}selected{% endif %}>Medical</option>
+                    <option value="Accident" {% if curr_category == 'Accident' %}selected{% endif %}>Accident</option>
+                    <option value="Flood" {% if curr_category == 'Flood' %}selected{% endif %}>Flood</option>
+                </select>
+                
+                <select name="priority" onchange="submitFilter()">
+                    <option value="All" {% if curr_priority == 'All' %}selected{% endif %}>All Priorities</option>
+                    <option value="HIGH" {% if curr_priority == 'HIGH' %}selected{% endif %}>HIGH Priority</option>
+                    <option value="MEDIUM" {% if curr_priority == 'MEDIUM' %}selected{% endif %}>MEDIUM Priority</option>
+                    <option value="LOW" {% if curr_priority == 'LOW' %}selected{% endif %}>LOW Priority</option>
+                </select>
+            </form>
+        </div>
+    </div>
+    
+    <div class="reports-grid">
+        {% for r in reports %}
+        <div class="report-card {% if r.priority == 'HIGH' and r.status != 'Resolved' %}pulse-high-priority{% endif %}" onclick="zoomToLocation({{ r.lat }}, {{ r.lng }})">
+            <div class="report-title">
+                <span>
+                    {% if r.problem == 'Fire' %}<i class="fa-solid fa-fire" style="color: #ef4444;"></i>
+                    {% elif r.problem == 'Medical' %}<i class="fa-solid fa-notes-medical" style="color: #10b981;"></i>
+                    {% elif r.problem == 'Accident' %}<i class="fa-solid fa-car-burst" style="color: #f59e0b;"></i>
+                    {% else %}<i class="fa-solid fa-triangle-exclamation"></i>{% endif %}
+                    {{ r.problem }}
+                </span>
+                <span class="badge priority-{{ r.priority }}">{{ r.priority }}</span>
+            </div>
+            <p style="font-size: 14px; color: #94a3b8; margin-bottom: 15px;"><i class="fa-solid fa-location-dot"></i> {{ r.location }}</p>
+            <p style="font-size: 14px; margin-bottom: 0;">{{ r.description }}</p>
+            
+            {% if r.ai_insight %}
+            <div class="ai-insight-box">
+                <i class="fa-solid fa-microchip"></i> <strong>{{ r.ai_insight }}</strong>
+            </div>
+            {% endif %}
+
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 15px;">
+                <span style="font-size: 13px; color: #cbd5f5;">ID: #{{ r.id }}</span>
+                <span class="badge status-{{ r.status.replace(' ', '') }}">{{ r.status }}</span>
+            </div>
+        </div>
+        {% else %}
+        <p style="color: #cbd5f5; grid-column: 1 / -1; padding: 20px; text-align: center; background: rgba(0,0,0,0.2); border-radius: 8px;">
+            <i class="fa-solid fa-circle-check" style="color: #10b981; font-size: 24px; display:block; margin-bottom: 10px;"></i>
+            No incidents found matching these filters.
+        </p>
+        {% endfor %}
+    </div>
+
+</div>
+
+<!-- Audio element for hackathon sound alert system -->
+<audio id="alertBeep" src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=success-1-6297.mp3" preload="auto"></audio>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    let currentIncidentCount = {{ total_cases }};
+
+    function refreshData() {
+        document.getElementById('global-loader').style.display = 'flex';
+        window.location.reload();
+    }
+
+    function submitFilter() {
+        document.getElementById('global-loader').style.display = 'flex';
+        document.getElementById('filterForm').submit();
+    }
+
+    // Polling logic for Auto-Refresh / Sound System
+    setInterval(async () => {
+        try {
+            let res = await fetch('/api/count');
+            let data = await res.json();
+            if(data.count > currentIncidentCount) {
+                console.log("New incident detected! Triggering alert.");
+                // Play sound
+                let beep = document.getElementById("alertBeep");
+                beep.volume = 0.5;
+                
+                let playPromise = beep.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(_ => {
+                        setTimeout(() => { refreshData(); }, 1500); // Wait for beep then reload
+                    }).catch(error => {
+                        console.log("Audio playback blocked by browser policy without active interaction.");
+                        refreshData(); 
+                    });
+                }
+            } else if (data.count < currentIncidentCount) {
+                // Incidents deleted/wiped, just sync seamlessly
+                refreshData();
+            }
+        } catch(e) {
+            console.error("Polling error", e);
+        }
+    }, 10000);
+
+    // Leaflet Map Initialization
+    var map = L.map('map').setView([20.5937, 78.9629], 5);
+    var reports = {{ reports|tojson }};
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+    }).addTo(map);
+
+    var bounds = [];
+
+    reports.forEach(function(r) {
+        if (r.lat && r.lng) {
+            var color = "#10b981"; // Low (Green)
+            if (r.priority === "HIGH") color = "#ef4444"; // Red
+            if (r.priority === "MEDIUM") color = "#f59e0b"; // Orange
+
+            if (r.status === "Resolved") color = "#64748b"; 
+
+            var marker = L.circleMarker([r.lat, r.lng], {
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.9,
+                radius: 10,
+                weight: 2
+            }).addTo(map);
+
+            var iconStr = '<i class="fa-solid fa-triangle-exclamation"></i> ';
+            if(r.problem==='Fire') iconStr = '<i class="fa-solid fa-fire" style="color: #ef4444;"></i> ';
+            if(r.problem==='Medical') iconStr = '<i class="fa-solid fa-notes-medical" style="color: #10b981;"></i> ';
+            if(r.problem==='Accident') iconStr = '<i class="fa-solid fa-car-burst" style="color: #f59e0b;"></i> ';
+
+            marker.bindPopup(
+                "<div style='color: #0f172a; font-family: Poppins; line-height: 1.6;'>" +
+                "<b>" + iconStr + r.problem + "</b><br>" +
+                "<i class='fa-solid fa-location-dot'></i> " + r.location + "<br>" +
+                "🚨 Priority: <b>" + r.priority + "</b><br>" +
+                "⏳ Status: " + r.status +
+                "</div>"
+            );
+            bounds.push([r.lat, r.lng]);
+        }
+    });
+
+    if (bounds.length > 0) {
+        map.fitBounds(bounds);
+    }
+
+    function zoomToLocation(lat, lng) {
+        if (lat && lng) {
+            map.flyTo([lat, lng], 13, { duration: 1.5 });
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
+    }
+
+    // Chart.js Setup
+    var ctxBar = document.getElementById('categoryBarChart').getContext('2d');
+    var catLabels = {{ cat_labels|tojson }};
+    var catData = {{ cat_data|tojson }};
+
+    if(catData.length > 0) {
+        new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: catLabels,
+                datasets: [{
+                    label: 'Total Incidents',
+                    data: catData,
+                    backgroundColor: '#38bdf8',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+    }
+
+    var ctxPie = document.getElementById('priorityPieChart').getContext('2d');
+    var priLabels = {{ pri_labels|tojson }};
+    var priData = {{ pri_data|tojson }};
+
+    if(priData.length > 0) {
+        var pieColors = priLabels.map(l => {
+            if(l === 'HIGH') return '#ef4444';
+            if(l === 'MEDIUM') return '#f59e0b';
+            return '#10b981'; 
+        });
+
+        new Chart(ctxPie, {
+            type: 'pie',
+            data: {
+                labels: priLabels,
+                datasets: [{
+                    data: priData,
+                    backgroundColor: pieColors,
+                    borderWidth: 0, hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#e2e8f0', font: { family: 'Poppins' } } }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>

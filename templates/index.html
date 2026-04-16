@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ReliefAI - Smart Emergency Response</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/" class="logo"><i class="fa-solid fa-bolt" style="color:#38bdf8; margin-right:5px;"></i> ReliefAI</a>
+    <div class="nav-links">
+        <a href="/"><i class="fa-solid fa-house"></i> Home</a>
+        {% if session.get('user_id') %}
+            <a href="/report"><i class="fa-solid fa-file-shield"></i> Report Emergency</a>
+            {% if session.get('role') == 'admin' %}
+                <a href="/dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+                <a href="/admin"><i class="fa-solid fa-shield-halved"></i> Admin</a>
+            {% endif %}
+            <span style="color: #10b981; font-size: 13px; margin: 0 10px; border-left: 1px solid #334155; padding-left: 10px;">Hello, <b>{{ (session.get('user') or 'User').title() }}</b> <span style="color:#94a3b8; font-size:11px;">({{ session.get('role', 'user') }})</span></span>
+            <a href="/logout" style="color: #ef4444;"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        {% else %}
+            <a href="/login"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+            <a href="/register"><i class="fa-solid fa-user-plus"></i> Register</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="container" style="text-align: center; margin-top: 80px;">
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">
+              <i class="fa-solid fa-circle-{% if category == 'success' %}check{% else %}exclamation{% endif %}"></i> 
+              {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <h1 style="font-size: 50px; margin-bottom: 20px;">Faster Response <br><span style="color: #38bdf8;">When Every Second Counts.</span></h1>
+    <p style="font-size: 18px; color: #cbd5f5; max-width: 600px; margin: 0 auto 40px auto;">
+        An AI-powered resource allocation and incident mapping system. Report emergencies, track their priority, and dispatch help logically.
+    </p>
+
+    <div>
+        <a href="/report" class="btn btn-primary" style="margin: 10px;"><i class="fa-solid fa-bullhorn"></i> Report an Emergency</a>
+        <a href="/dashboard" class="btn" style="background: rgba(255,255,255,0.1); color: white; margin: 10px; border: 1px solid rgba(255,255,255,0.2);"><i class="fa-solid fa-earth-americas"></i> View Live Dashboard</a>
+    </div>
+
+    <div class="features-grid">
+        <div class="feature-item">
+            <div class="feature-icon"><i class="fa-solid fa-microchip" style="color: #38bdf8;"></i></div>
+            <h3>Intelligent Triaging</h3>
+            <p>Our backend AI models instantly parse your report to determine if it's a High, Medium, or Low priority incident.</p>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon"><i class="fa-solid fa-map-location-dot" style="color: #10b981;"></i></div>
+            <h3>Interactive Mapping</h3>
+            <p>Utilizing high-contrast, dark-mode specialized mapping to dynamically display incidents exactly where they happen.</p>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon"><i class="fa-solid fa-truck-medical" style="color: #ef4444;"></i></div>
+            <h3>Resource Allocation</h3>
+            <p>Empowers response coordinators with real-time categorizations (Fire, Medical, Accidents) to deploy proper units.</p>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
